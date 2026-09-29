@@ -1,0 +1,4 @@
+# Placeholder — not used yet.
+# Planned for Day 6: prompt template for extracting organizational
+# decisions from meeting notes / documents, consumed by
+# app/services/decision_service.py.
