@@ -8,6 +8,7 @@ pydantic-settings==2.7.1
 sqlalchemy==2.0.36
 asyncpg==0.30.0
 pgvector==0.3.6
+alembic==1.14.0
 
 # --- Auth scaffolding (not wired to endpoints yet, but implemented) ---
 python-jose[cryptography]==3.3.0

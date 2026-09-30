@@ -13,13 +13,19 @@ Running log of what's built vs. planned. Update this as each day's work lands.
 - [x] `.env.example`, `.gitignore`, README, architecture docs
 - [x] Backend tests (health real; others assert honest 501/skip)
 
-## Day 2 — Auth + document upload (planned)
+## Day 2 — Auth + document upload (this delivery)
 
-- [ ] Implement `/api/v1/auth/login` + `/register` for real
-- [ ] Alembic migration for `users` table
-- [ ] Document upload endpoint + storage (local disk for MVP)
-- [ ] `documents` table migration
-- [ ] Wire frontend login form + document upload to real endpoints
+- [x] Implement `/api/v1/auth/register` + `/login` + `/me` for real (JWT-based)
+- [x] Alembic set up; migration `0001_create_users_table`
+- [x] Document upload endpoint + local-disk storage
+- [x] Migration `0002_create_documents_table` (owner_id FK, cascade delete)
+- [x] Document listing + get-by-id, strictly scoped to owner (404 not 403 for others' docs)
+- [x] Wire frontend login/register form to real endpoints (JWT stored in localStorage)
+- [x] Wire frontend document upload + list to real endpoints
+- [x] Dashboard shows real signed-in user + real document count
+- [x] Sidebar shows auth state + sign out from anywhere in the app
+- [x] `test_auth.py`, `test_documents.py`, `test_permissions.py` rewritten as real integration tests (require DB)
+- [x] `test_security.py` added — self-contained unit tests for hashing/JWT (no DB needed)
 
 ## Day 3 — Text extraction + chunking + embeddings (planned)
 

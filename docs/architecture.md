@@ -117,3 +117,48 @@ knows exactly what to fill in.
 
 These are sequenced across Days 2-7 — see the root `README.md` for the
 day-by-day plan.
+
+## 11. Day 2: auth and document ownership
+
+Day 2 implements the two scaffolds Day 1 deliberately left unwired:
+authentication (`app/core/security.py`) and the document upload feature.
+
+**Auth uses stateless JWTs, not server-side sessions.** `/api/v1/auth/login`
+and `/register` both return a signed JWT (`sub` = user id) with a fixed
+expiry (`ACCESS_TOKEN_EXPIRE_MINUTES`, default 24h). The frontend stores it
+in `localStorage` (`frontend/lib/token.ts`) and sends it as
+`Authorization: Bearer <token>` on every request. This is the simplest
+option for a 7-day MVP — no session table, no server-side revocation
+list — at the cost of not being able to revoke a token before it expires.
+That trade-off is acceptable for now; a refresh-token or session-table
+approach is a reasonable Day 8+ hardening step if this goes past MVP.
+
+**Every document is strictly owned by exactly one user.** `documents.owner_id`
+is a required foreign key, and every query in `document_service.py` filters
+by it. `GET /api/v1/documents/{id}` returns `404` (not `403`) when a
+document exists but belongs to someone else — this is deliberate: a `403`
+confirms the document exists, a `404` doesn't. `tests/test_permissions.py`
+encodes this as a real, un-skipped test now that there's something to test.
+
+**Uploads go straight to local disk, not cloud storage.** Files are saved
+under `data/uploads/` (configurable via `UPLOAD_DIR`) with a random
+UUID-based filename; the user-facing name is kept separately in
+`Document.original_filename`. For a 7-day local MVP this avoids taking a
+dependency on S3/GCS credentials and IAM setup that would eat into build
+time without changing anything about how the RAG pipeline (Day 3+) reads
+the files. `document_service.save_upload_bytes()` is the single seam to
+change if/when this needs to move to cloud storage later.
+
+**Upload validation is intentionally minimal but real.** Extension
+allowlist (`.pdf`, `.docx`, `.txt`), a size cap (`MAX_UPLOAD_SIZE_MB`,
+default 20MB), and an empty-file check happen in the route before
+anything touches disk or the database. Virus scanning, MIME-sniffing
+beyond the browser-supplied `Content-Type`, and per-user storage quotas
+are out of scope for the MVP.
+
+**The frontend's `lib/token.ts` is split out from `lib/auth.ts`
+specifically to avoid a circular import**: `lib/api.ts` needs the token to
+attach the `Authorization` header, and `lib/auth.ts`'s `useAuth()` hook
+calls into `lib/api.ts` (for `getCurrentUser()`) — so the token
+get/set/clear functions live in a third, dependency-free module that both
+can import.

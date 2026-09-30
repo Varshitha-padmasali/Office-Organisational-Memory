@@ -4,9 +4,10 @@ An AI-powered system where employees upload organizational documents and
 ask natural-language questions, answered with grounded, cited responses
 via RAG (Retrieval-Augmented Generation).
 
-**Status: Day 1 of 7 — foundation only.** See `docs/project_notes.md` for
-the full day-by-day plan. Nothing described below as "not implemented" is
-faked anywhere in the code — see `docs/architecture.md` §4 for why.
+**Status: Day 2 of 7 — foundation + real auth + document upload.** See
+`docs/project_notes.md` for the full day-by-day plan. Nothing described
+below as "not implemented" is faked anywhere in the code — see
+`docs/architecture.md` §4 for why.
 
 ## Tech stack
 
@@ -54,6 +55,7 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+alembic upgrade head              # creates the users + documents tables
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -82,16 +84,31 @@ npm run dev
 Open http://localhost:3000 — it redirects to `/dashboard`, which calls the
 backend's `/health` endpoint live and shows the connection status.
 
-### 5. Run backend tests
+### 5. Try the real auth + document upload flow
+
+1. Go to http://localhost:3000/login, click "Need an account? Create one",
+   and register.
+2. You're redirected to the dashboard, now showing "Signed in as …" with a
+   real document count.
+3. Go to http://localhost:3000/documents and upload a `.pdf`, `.docx`, or
+   `.txt` file (up to 20MB) — it's stored on disk under `data/uploads/`
+   and its metadata in Postgres.
+
+### 6. Run backend tests
 
 ```bash
 cd backend
 pytest
 ```
 
-Expected result: tests for `/health`, root, and the stub routes' honest
-501 responses pass; `test_rag.py` and `test_permissions.py` are explicitly
-skipped (nothing to test yet — see each file's docstring).
+Expected result:
+- `test_health.py`, `test_security.py` — pass with no setup (no DB needed).
+- `test_auth.py`, `test_documents.py`, `test_permissions.py` — real
+  integration tests against register/login/upload/ownership; **require
+  Postgres running** (`docker compose up -d`) and migrations applied
+  (`alembic upgrade head`).
+- `test_search.py` — still asserts the honest 501 (search isn't built yet).
+- `test_rag.py` — still explicitly skipped (nothing to test yet).
 
 ## Project structure
 
@@ -115,11 +132,11 @@ office-organizational-memory/
 | `GET /health`                  | ✅ Fully functional                        |
 | Frontend ↔ backend connectivity| ✅ Verified live on the dashboard page     |
 | App shell (sidebar/nav/layout) | ✅ Fully functional                        |
-| Login page                     | 🚧 UI only — backend returns 501           |
+| Auth (register/login/me, JWT)  | ✅ Fully functional                        |
+| Document upload/list/get       | ✅ Fully functional (auth-gated)           |
 | Chat page                      | 🚧 UI only — backend returns 501           |
-| Document upload/list           | 🚧 UI only — backend returns 501           |
 | Meetings / Decisions / Knowledge Gaps | 🚧 Placeholder pages only           |
-| Database schema (beyond `users`) | ⏳ Not created yet (by design — Day 2-3) |
+| Database schema (beyond `users` + `documents`) | ⏳ Not created yet (by design — Day 3) |
 
 See `docs/api.md` for the full endpoint-by-endpoint status table.
 

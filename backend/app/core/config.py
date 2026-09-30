@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # --- AI provider (used starting Day 3+, not called on Day 1) ---
     GEMINI_API_KEY: str = ""
 
+    # --- File uploads (Day 2) ---
+    # Relative paths are resolved against the repo root by app/utils/file_utils.py.
+    UPLOAD_DIR: str = "data/uploads"
+    MAX_UPLOAD_SIZE_MB: int = 20
+
     # --- CORS ---
     # Comma-separated list of allowed origins, e.g.
     # "http://localhost:3000,https://app.example.com"

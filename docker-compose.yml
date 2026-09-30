@@ -1,7 +1,15 @@
+version: "3.9"
+
+# Day 1 scope: only Postgres (with pgvector) is containerized.
+# Frontend and backend run locally with `npm run dev` / `uvicorn` for fast
+# iteration during the 7-day build; they'll get their own services here
+# once the app is stable enough to containerize (see docs/architecture.md).
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: org-memory-db
+    container_name: org-memory-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -10,6 +18,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d org_memory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -15,6 +16,13 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading, isAuthenticated, logout } = useAuth();
+
+  function handleLogout() {
+    logout();
+    router.push("/login");
+  }
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 border-r border-gray-200 bg-white">
@@ -40,8 +48,26 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <div className="px-3 py-4 border-t border-gray-200 text-xs text-gray-400">
-        MVP — Day 1 foundation
+      <div className="px-3 py-4 border-t border-gray-200">
+        {loading && <p className="text-xs text-gray-400">Checking session…</p>}
+        {!loading && isAuthenticated && user && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 truncate" title={user.email}>
+              {user.email}
+            </p>
+            <button
+              onClick={handleLogout}
+              className="text-xs font-medium text-gray-600 hover:text-gray-900"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+        {!loading && !isAuthenticated && (
+          <Link href="/login" className="text-xs font-medium text-brand-600 hover:underline">
+            Sign in
+          </Link>
+        )}
       </div>
     </aside>
   );

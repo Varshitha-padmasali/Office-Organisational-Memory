@@ -8,48 +8,60 @@
  */
 
 export interface HealthStatus {
-    status: "ok" | "degraded";
-    service: string;
-    environment: string;
-    database: "connected" | "unreachable";
-  }
-  
-  // --- Auth (backend: not implemented yet, planned Day 2) ---
-  export interface User {
-    id: string;
-    email: string;
-    full_name?: string | null;
-  }
-  
-  export interface LoginPayload {
-    email: string;
-    password: string;
-  }
-  
-  // --- Documents (backend: not implemented yet, planned Day 2-3) ---
-  export type DocumentStatus = "uploading" | "processing" | "ready" | "failed";
-  
-  export interface OrgDocument {
-    id: string;
-    filename: string;
-    status: DocumentStatus;
-    uploaded_at: string;
-    size_bytes: number;
-  }
-  
-  // --- Chat / RAG (backend: not implemented yet, planned Day 4-5) ---
-  export interface SourceCitation {
-    document_id: string;
-    document_name: string;
-    snippet: string;
-    page?: number;
-  }
-  
-  export interface ChatMessage {
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    citations?: SourceCitation[];
-    created_at: string;
-  }
-  
+  status: "ok" | "degraded";
+  service: string;
+  environment: string;
+  database: "connected" | "unreachable";
+}
+
+// --- Auth (backend: implemented as of Day 2) ---
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string | null;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface RegisterPayload extends LoginPayload {
+  full_name?: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+// --- Documents (backend: implemented as of Day 2; extraction/chunking
+// still Day 3, so "processing"/"ready"/"failed" aren't produced yet) ---
+export type DocumentStatus = "uploaded" | "processing" | "ready" | "failed";
+
+export interface OrgDocument {
+  id: string;
+  filename: string;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  status: DocumentStatus;
+  uploaded_at: string;
+  owner_id: string;
+}
+
+// --- Chat / RAG (backend: not implemented yet, planned Day 4-5) ---
+export interface SourceCitation {
+  document_id: string;
+  document_name: string;
+  snippet: string;
+  page?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations?: SourceCitation[];
+  created_at: string;
+}

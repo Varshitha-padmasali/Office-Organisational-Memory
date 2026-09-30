@@ -1,10 +1,11 @@
 """
 Pydantic schemas for auth requests/responses.
 
-STATUS (Day 1): shapes are defined so the frontend login page and backend
-route stub agree on a contract, but no route actually validates credentials
-yet — see app/api/routes/auth.py.
+STATUS (Day 2): implemented for real — these are the exact shapes used by
+the now-functional /api/v1/auth/* routes.
 """
+
+import uuid
 
 from pydantic import BaseModel, EmailStr
 
@@ -14,13 +15,19 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str | None = None
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
 
 class UserOut(BaseModel):
-    id: str
+    id: uuid.UUID
     email: EmailStr
     full_name: str | None = None
 

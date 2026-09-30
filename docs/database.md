@@ -1,6 +1,6 @@
 # Database
 
-## Day 1 status
+## Status as of Day 2
 
 - **Engine:** PostgreSQL 16 with the `pgvector` extension, run via
   `docker-compose.yml` (image: `pgvector/pgvector:pg16`).
@@ -9,37 +9,61 @@
 - **Connection layer:** `backend/app/db/database.py` — async SQLAlchemy
   engine (`asyncpg` driver) + a `get_db()` FastAPI dependency for
   per-request sessions + `check_db_connection()` used by `/health`.
-- **Schema:** intentionally minimal. Only `users` (see
-  `backend/app/models/user.py`) is defined, and it has **no migration
-  yet** — it exists as a starting point for Day 2 auth, not as something
-  currently created in the database.
+- **Migrations:** Alembic, configured in `backend/alembic.ini` +
+  `backend/app/db/migrations/env.py`. Two migrations exist so far:
+  - `0001_create_users_table.py`
+  - `0002_create_documents_table.py`
 
-## Why no schema yet
+Run them with:
 
-The real schema — documents, chunks (with `vector` embedding columns),
-conversations, messages, decisions, knowledge gaps — depends on decisions
-we haven't made yet: chunk size/overlap strategy, embedding model
-dimensionality, and whether conversations need multi-turn context. Writing
-the schema before those are settled would likely mean throwing away
-migrations. See `docs/architecture.md` §5 for the full reasoning.
-
-## Planned schema (Day 2-3 preview, not yet implemented)
-
-```
-users            (id, email, hashed_password, full_name, created_at)
-documents        (id, owner_id, filename, status, storage_path, uploaded_at)
-chunks           (id, document_id, content, embedding vector(N), chunk_index)
-conversations    (id, user_id, created_at)
-messages         (id, conversation_id, role, content, created_at)
-decisions        (id, document_id, summary, decided_at, extracted_at)
-knowledge_gaps   (id, question, asked_at, resolved boolean)
+```bash
+cd backend
+alembic upgrade head
 ```
 
-This will be formalized via Alembic migrations once finalized — see
-`backend/app/db/migrations/README.md`.
+## Current schema
+
+```
+users
+  id                uuid, primary key
+  email             varchar(255), unique, indexed
+  hashed_password   varchar(255)
+  full_name         varchar(255), nullable
+  created_at        timestamptz, default now()
+
+documents
+  id                 uuid, primary key
+  owner_id           uuid, FK -> users.id (ON DELETE CASCADE), indexed
+  filename           varchar(255)   -- collision-safe name on disk
+  original_filename  varchar(255)   -- what the user uploaded, for display
+  content_type       varchar(100)
+  size_bytes         integer
+  storage_path       varchar(512)   -- local disk path (see app/utils/file_utils.py)
+  status             varchar(20), default 'uploaded'
+  uploaded_at        timestamptz, default now()
+```
+
+`documents.status` is always `"uploaded"` today. `"processing"`, `"ready"`,
+and `"failed"` are reserved for Day 3, once text extraction exists and can
+actually fail or complete.
+
+## Why chunks/embeddings still don't exist
+
+The `chunks` table (with a `pgvector` embedding column), `conversations`,
+`messages`, `decisions`, and `knowledge_gaps` are still not created. Chunk
+size/overlap strategy and embedding dimensionality need to be decided
+first (Day 3) — see `docs/architecture.md` §5 for the original reasoning,
+which still holds.
 
 ## Local access
 
 ```bash
 docker exec -it org-memory-postgres psql -U postgres -d org_memory
+```
+
+```sql
+-- inside psql
+\dt                      -- list tables
+SELECT * FROM users;
+SELECT * FROM documents;
 ```

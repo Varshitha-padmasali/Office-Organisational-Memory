@@ -16,25 +16,56 @@ summary.
 
 | Method | Path                       | Status              | Planned |
 |--------|----------------------------|---------------------|---------|
-| POST   | `/api/v1/auth/login`       | 🚧 Stub (HTTP 501)  | Day 2   |
-| POST   | `/api/v1/auth/register`    | 🚧 Stub (HTTP 501)  | Day 2   |
-| GET    | `/api/v1/documents/`       | 🚧 Stub (HTTP 501)  | Day 2-3 |
+| POST   | `/api/v1/auth/register`    | ✅ Implemented (Day 2) | — |
+| POST   | `/api/v1/auth/login`       | ✅ Implemented (Day 2) | — |
+| GET    | `/api/v1/auth/me`          | ✅ Implemented (Day 2) | — |
+| POST   | `/api/v1/documents/upload` | ✅ Implemented (Day 2) | — |
+| GET    | `/api/v1/documents/`       | ✅ Implemented (Day 2) | — |
+| GET    | `/api/v1/documents/{id}`   | ✅ Implemented (Day 2) | — |
 | GET    | `/api/v1/chat/`            | 🚧 Stub (HTTP 501)  | Day 4-5 |
 | GET    | `/api/v1/search/`          | 🚧 Stub (HTTP 501)  | Day 4   |
 | GET    | `/api/v1/meetings/`        | 🚧 Stub (HTTP 501)  | Day 6   |
 | GET    | `/api/v1/decisions/`       | 🚧 Stub (HTTP 501)  | Day 6   |
 | GET    | `/api/v1/knowledge-gaps/`  | 🚧 Stub (HTTP 501)  | Day 7   |
 
-Every stub returns a consistent error shape:
+Every remaining stub returns a consistent error shape:
 
 ```json
 {
   "error": {
-    "message": "Documents endpoints are not implemented yet. Planned for Day 2-3.",
+    "message": "Chat endpoints are not implemented yet. Planned for Day 4-5.",
     "status_code": 501
   }
 }
 ```
 
-This is the same shape any real error uses (see `app/main.py`'s exception
-handlers), so frontend error handling doesn't need special-casing.
+## Auth (Day 2)
+
+- **POST `/api/v1/auth/register`** — `{ email, password, full_name? }` →
+  `201` with `{ access_token, token_type }`. `409` if the email is already
+  registered.
+- **POST `/api/v1/auth/login`** — `{ email, password }` → `200` with
+  `{ access_token, token_type }`. `401` on wrong email/password.
+- **GET `/api/v1/auth/me`** — requires `Authorization: Bearer <token>` →
+  `200` with `{ id, email, full_name }`. `401` if the token is missing,
+  invalid, or expired.
+
+Tokens are JWTs signed with `JWT_SECRET`, valid for
+`ACCESS_TOKEN_EXPIRE_MINUTES` (default 24h). There is no refresh-token flow
+yet — once a token expires, the user has to log in again.
+
+## Documents (Day 2)
+
+- **POST `/api/v1/documents/upload`** — multipart `file` field. Requires
+  auth. Accepts `.pdf`, `.docx`, `.txt` up to `MAX_UPLOAD_SIZE_MB` (default
+  20MB). Returns `201` with the created document's metadata. `400` for
+  disallowed file types or empty files, `413` if too large.
+- **GET `/api/v1/documents/`** — requires auth. Returns only the
+  signed-in user's own documents (see `docs/architecture.md` §11 for the
+  ownership model).
+- **GET `/api/v1/documents/{id}`** — requires auth. `404` if the document
+  doesn't exist *or* belongs to someone else (we don't reveal which).
+
+Uploaded documents are stored with `status: "uploaded"` — text extraction
+and chunking (which would move them to `"processing"`/`"ready"`/`"failed"`)
+are Day 3.

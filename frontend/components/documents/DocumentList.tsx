@@ -2,25 +2,30 @@
 
 import { useEffect, useState } from "react";
 import type { OrgDocument } from "@/types";
-import { listDocuments } from "@/lib/api";
+import { listDocuments, ApiError } from "@/lib/api";
 import DocumentCard from "./DocumentCard";
 
+interface DocumentListProps {
+  /** Bump this (e.g. after an upload) to trigger a refetch. */
+  refreshToken?: number;
+}
+
 /**
- * STATUS: the backend's GET /api/v1/documents/ returns HTTP 501 today
- * (planned Day 2-3). This component calls the real function and displays
- * the honest error rather than mocked documents.
+ * STATUS (Day 2): fully functional — calls the real
+ * GET /api/v1/documents/ endpoint, scoped to the signed-in user.
  */
-export default function DocumentList() {
+export default function DocumentList({ refreshToken }: DocumentListProps) {
   const [documents, setDocuments] = useState<OrgDocument[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     listDocuments()
       .then(setDocuments)
-      .catch((err) => setError(err instanceof Error ? err.message : "Unknown error"))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Unknown error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshToken]);
 
   if (loading) {
     return <p className="text-sm text-gray-400">Loading…</p>;
@@ -35,7 +40,7 @@ export default function DocumentList() {
   }
 
   if (documents.length === 0) {
-    return <p className="text-sm text-gray-400">No documents yet.</p>;
+    return <p className="text-sm text-gray-400">No documents yet — upload one above.</p>;
   }
 
   return (
