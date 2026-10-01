@@ -39,17 +39,20 @@ Running log of what's built vs. planned. Update this as each day's work lands.
 - [x] `test_chunking.py`, `test_extraction.py`, `test_embedding.py` added — all pure/mocked, no DB or network needed
 - [x] `test_documents.py` extended for the pipeline, tolerant of missing `GEMINI_API_KEY` in test environments
 
-## Day 4 — Retrieval + search (planned)
+## Day 4 — Retrieval + search (this delivery)
 
-- [ ] pgvector similarity search (`retrieval_service.py`) — table + ivfflat index already exist (Day 3), just needs the query
-- [ ] `/api/v1/search` implemented for real
-- [ ] Embed the search query itself (reuse `embedding_service.embed_texts`)
+- [x] pgvector cosine-similarity search (`retrieval_service.py`) — scoped to owner + `status="ready"`
+- [x] `/api/v1/search?q=...&top_k=...` implemented for real, `503` on missing `GEMINI_API_KEY`
+- [x] Query embedded via `embedding_service.embed_texts(..., task_type="retrieval_query")`
+- [x] Frontend Chat page wired to real search (gated behind sign-in); shows raw ranked passages as citations, explicitly NOT a generated answer
+- [x] `test_search.py` rewritten with real integration tests, including a full upload→search e2e test tolerant of missing `GEMINI_API_KEY`
 
 ## Day 5 — RAG chat with citations (planned)
 
-- [ ] Gemini API integration for generation
-- [ ] `/api/v1/chat` implemented for real, returns grounded answers + citations
-- [ ] Frontend chat window wired to real endpoint
+- [ ] Gemini API integration for **generation** (retrieval already works — Day 4)
+- [ ] `rag_service.py`: feed Day 4's search results to Gemini as context, get back a grounded answer
+- [ ] `/api/v1/chat` implemented for real, returns a generated answer + the citations it was grounded on
+- [ ] Frontend chat window updated to show the generated answer as the primary content, citations as supporting evidence (currently citations ARE the content — see `docs/architecture.md` §13)
 
 ## Day 6 — Meetings + decisions (planned)
 

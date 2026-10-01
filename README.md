@@ -4,10 +4,11 @@ An AI-powered system where employees upload organizational documents and
 ask natural-language questions, answered with grounded, cited responses
 via RAG (Retrieval-Augmented Generation).
 
-**Status: Day 3 of 7 — foundation + real auth + document upload +
-extraction/chunking/embeddings.** See `docs/project_notes.md` for the full
-day-by-day plan. Nothing described below as "not implemented" is faked
-anywhere in the code — see `docs/architecture.md` §4 for why.
+**Status: Day 4 of 7 — foundation + real auth + document upload +
+extraction/chunking/embeddings + semantic search.** See
+`docs/project_notes.md` for the full day-by-day plan. Nothing described
+below as "not implemented" is faked anywhere in the code — see
+`docs/architecture.md` §4 for why.
 
 ## Tech stack
 
@@ -88,7 +89,7 @@ npm run dev
 Open http://localhost:3000 — it redirects to `/dashboard`, which calls the
 backend's `/health` endpoint live and shows the connection status.
 
-### 5. Try the real auth + document upload flow
+### 5. Try the real auth + document upload + search flow
 
 1. Go to http://localhost:3000/login, click "Need an account? Create one",
    and register.
@@ -99,6 +100,10 @@ backend's `/health` endpoint live and shows the connection status.
    and (if `GEMINI_API_KEY` is set) immediately extracted, chunked, and
    embedded. Check `GET /api/v1/documents/{id}/chunks` in the API docs
    (http://localhost:8000/docs) to see the chunks it produced.
+4. Go to http://localhost:3000/chat and ask a question related to what you
+   uploaded — you'll get back the actual matching passages from your
+   document, ranked by relevance, with similarity scores. This is real
+   search, not a generated answer yet (that's Day 5).
 
 ### 6. Run backend tests
 
@@ -112,14 +117,14 @@ Expected result:
   `test_extraction.py`, `test_embedding.py` — pass with no setup (no DB,
   no network, no API key needed — the Gemini call is mocked in
   `test_embedding.py`).
-- `test_auth.py`, `test_documents.py`, `test_permissions.py` — real
-  integration tests against register/login/upload/ownership; **require
-  Postgres running** (`docker compose up -d`) and migrations applied
-  (`alembic upgrade head`). Document status assertions accept either
-  `"ready"` or `"failed"`, since that depends on whether a real
-  `GEMINI_API_KEY` is configured in your environment.
-- `test_search.py` — still asserts the honest 501 (search isn't built yet).
-- `test_rag.py` — still explicitly skipped (nothing to test yet).
+- `test_auth.py`, `test_documents.py`, `test_permissions.py`,
+  `test_search.py` — real integration tests; **require Postgres running**
+  (`docker compose up -d`) and migrations applied (`alembic upgrade
+  head`). Status/result assertions accept whichever outcome is correct for
+  whether a real `GEMINI_API_KEY` is configured in your environment
+  (`"ready"` vs `"failed"`, populated results vs `503`) — see each file's
+  docstring.
+- `test_rag.py` — still explicitly skipped (nothing to test yet — Day 5).
 
 ## Project structure
 
@@ -148,7 +153,8 @@ office-organizational-memory/
 | Text extraction (PDF/DOCX/TXT) | ✅ Fully functional                        |
 | Chunking                       | ✅ Fully functional                        |
 | Embeddings (Gemini)            | ✅ Fully functional (needs `GEMINI_API_KEY`) |
-| Semantic search / chat         | 🚧 UI only — backend returns 501 (Day 4-5) |
+| Semantic search                | ✅ Fully functional (needs `GEMINI_API_KEY`) |
+| Chat page                      | 🟡 Shows real search results, not yet a generated answer (Day 5) |
 | Meetings / Decisions / Knowledge Gaps | 🚧 Placeholder pages only           |
 | Database schema (beyond `users`/`documents`/`chunks`) | ⏳ Not created yet (Day 6-7) |
 

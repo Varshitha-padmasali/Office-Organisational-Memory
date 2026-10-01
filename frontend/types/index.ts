@@ -50,7 +50,22 @@ export interface OrgDocument {
   owner_id: string;
 }
 
-// --- Chat / RAG (backend: not implemented yet, planned Day 4-5) ---
+// --- Search (backend: implemented as of Day 4) ---
+export interface SearchResultItem {
+  chunk_id: string;
+  document_id: string;
+  document_name: string;
+  content: string;
+  score: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResultItem[];
+}
+
+// --- Chat / RAG (backend: search is real as of Day 4; a single generated
+// answer with inline citations is still Day 5 — see ChatWindow.tsx) ---
 export interface SourceCitation {
   document_id: string;
   document_name: string;

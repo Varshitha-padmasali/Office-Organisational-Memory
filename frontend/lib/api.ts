@@ -14,6 +14,7 @@ import type {
   LoginPayload,
   OrgDocument,
   RegisterPayload,
+  SearchResponse,
   TokenResponse,
   User,
 } from "@/types";
@@ -100,6 +101,17 @@ export async function getCurrentUser(): Promise<User> {
 /** @status implemented (Day 2) — lists the signed-in user's own documents. */
 export async function listDocuments(): Promise<OrgDocument[]> {
   return request<OrgDocument[]>("/api/v1/documents/");
+}
+
+/**
+ * @status implemented (Day 4) — real semantic search over the signed-in
+ * user's own "ready" documents. Returns ranked raw passages, not a
+ * generated answer (that's Day 5) — see ChatWindow.tsx for how this is
+ * presented in the meantime.
+ */
+export async function searchDocuments(query: string, topK = 5): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query, top_k: String(topK) });
+  return request<SearchResponse>(`/api/v1/search/?${params.toString()}`);
 }
 
 /**

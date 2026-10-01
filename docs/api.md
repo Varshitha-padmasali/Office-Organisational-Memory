@@ -24,11 +24,48 @@ summary.
 | GET    | `/api/v1/documents/{id}`            | ✅ Implemented (Day 2) | — |
 | POST   | `/api/v1/documents/{id}/reprocess`  | ✅ Implemented (Day 3) | — |
 | GET    | `/api/v1/documents/{id}/chunks`     | ✅ Implemented (Day 3) | — |
-| GET    | `/api/v1/chat/`                     | 🚧 Stub (HTTP 501)  | Day 4-5 |
-| GET    | `/api/v1/search/`                   | 🚧 Stub (HTTP 501)  | Day 4   |
+| GET    | `/api/v1/search/`                   | ✅ Implemented (Day 4) | — |
+| GET    | `/api/v1/chat/`                     | 🚧 Stub (HTTP 501)  | Day 5   |
 | GET    | `/api/v1/meetings/`                 | 🚧 Stub (HTTP 501)  | Day 6   |
 | GET    | `/api/v1/decisions/`                | 🚧 Stub (HTTP 501)  | Day 6   |
 | GET    | `/api/v1/knowledge-gaps/`           | 🚧 Stub (HTTP 501)  | Day 7   |
+
+## Search (Day 4)
+
+- **GET `/api/v1/search/?q=<query>&top_k=<n>`** — requires auth. Embeds
+  `q` via the same Gemini model used for documents
+  (`task_type="retrieval_query"`), then runs a pgvector cosine-similarity
+  query scoped to the signed-in user's own documents with
+  `status: "ready"`. Returns:
+
+  ```json
+  {
+    "query": "how many vacation days do employees get",
+    "results": [
+      {
+        "chunk_id": "...",
+        "document_id": "...",
+        "document_name": "policy.txt",
+        "content": "Employees are entitled to twenty-five days...",
+        "score": 0.83
+      }
+    ]
+  }
+  ```
+
+  `score` is cosine similarity (`1 - cosine_distance`): 1.0 = identical,
+  0.0 = unrelated, negative = opposite. `top_k` defaults to 5, max 20.
+  `503` if embeddings aren't configured (`GEMINI_API_KEY` missing) — this
+  is a server configuration problem, not a bad request, hence 503 rather
+  than 400. Empty `results` (not an error) if the user has no `"ready"`
+  documents or nothing matched well.
+
+  This returns **raw matching passages, not a generated answer** —
+  turning these into one written response with inline citations is Day 5
+  (`/api/v1/chat/`, still a stub). The frontend's Chat page already calls
+  this endpoint and displays results as citations with no synthesized
+  summary sentence, specifically to avoid implying an LLM wrote something
+  it didn't.
 
 ## Documents (Day 2-3)
 
@@ -57,7 +94,7 @@ Every remaining stub returns a consistent error shape:
 ```json
 {
   "error": {
-    "message": "Chat endpoints are not implemented yet. Planned for Day 4-5.",
+    "message": "Chat endpoints are not implemented yet. Planned for Day 5.",
     "status_code": 501
   }
 }

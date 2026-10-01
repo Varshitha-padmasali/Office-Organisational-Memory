@@ -217,3 +217,47 @@ padded vectors.
 it now, on an empty table, means Day 4 doesn't need its own migration just
 to add an index — it only needs to write the `SELECT ... ORDER BY
 embedding <=> :query_vector` query itself.
+
+## 13. Day 4: semantic search
+
+**Search is scoped to the caller's own `"ready"` documents — the same
+ownership model as documents.** `retrieval_service.search_chunks()` joins
+`chunks` to `documents` and filters on both `owner_id` and
+`status = "ready"` in the same query, rather than searching everything and
+filtering after. This means a document stuck in `"failed"` (e.g. no
+`GEMINI_API_KEY` was set at upload time) correctly never appears in search
+results — it has no chunks to match anyway, but the explicit status filter
+also protects against a future bug where a `"failed"` document somehow
+has stale chunks left over from a prior successful run.
+
+**The query is embedded with `task_type="retrieval_query"`, not
+`"retrieval_document"`.** Gemini's embedding model supports asymmetric
+retrieval: the thing being searched for and the things being searched
+through are embedded with slightly different task hints, which
+empirically improves ranking versus embedding both the same way. Getting
+this pairing right now (rather than using `"retrieval_document"`
+everywhere for simplicity) costs nothing extra in code and avoids a
+retrieval-quality regression that would be easy to miss until Day 5's
+generated answers started looking off.
+
+**A missing `GEMINI_API_KEY` surfaces as `503`, not `200` with empty
+results or a `500`.** Search always has to embed the incoming query, so if
+embeddings aren't configured, the request genuinely cannot be fulfilled —
+that's a server-side configuration problem (503 Service Unavailable), not
+"nothing matched" (which would be a misleading `200`) or an unhandled
+crash (`500`). The frontend's Chat page surfaces this 503's message
+directly so a developer immediately knows why search isn't working,
+rather than silently showing "no results found."
+
+**The Chat page calls real search now, but deliberately shows raw passages
+with no synthesized summary sentence.** It would be easy to template
+something like `"Based on your documents, the answer is: {top
+result}"` — but that's not what happened; no LLM read these passages and
+wrote that sentence. Doing so would violate the project's core "no fake
+functionality" rule as surely as a mocked API response would. Instead,
+each "assistant" turn is explicitly labeled as search results and renders
+the matches as citations (reusing the existing `SourceCitation`
+component). Day 5 replaces this with an actual call to Gemini to generate
+a grounded answer from the same retrieved passages — at that point the
+citations become support *for* a written answer instead of *being* the
+answer.
