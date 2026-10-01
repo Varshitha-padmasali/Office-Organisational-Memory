@@ -27,17 +27,23 @@ Running log of what's built vs. planned. Update this as each day's work lands.
 - [x] `test_auth.py`, `test_documents.py`, `test_permissions.py` rewritten as real integration tests (require DB)
 - [x] `test_security.py` added — self-contained unit tests for hashing/JWT (no DB needed)
 
-## Day 3 — Text extraction + chunking + embeddings (planned)
+## Day 3 — Text extraction + chunking + embeddings (this delivery)
 
-- [ ] PDF/DOCX/TXT text extraction (`extraction_service.py`)
-- [ ] Chunking strategy finalized (`chunking_service.py`)
-- [ ] Embedding model selected + wired (`embedding_service.py`)
-- [ ] `chunks` table migration with `vector` column
+- [x] PDF/DOCX/TXT text extraction (`extraction_service.py`) — real pypdf/python-docx/stdlib implementations
+- [x] Chunking strategy finalized (`chunking_service.py`) — fixed-size sliding window, 1000/150 default, logic verified by standalone execution
+- [x] Embedding model selected + wired (`embedding_service.py`) — Gemini `text-embedding-004`, 768-dim
+- [x] `chunks` table migration (`0003_create_chunks_table.py`) with `vector(768)` column + ivfflat cosine index
+- [x] Upload now runs the full pipeline synchronously; `status` becomes `"ready"` or `"failed"`
+- [x] `POST /api/v1/documents/{id}/reprocess` — retry after fixing a failure (e.g. adding `GEMINI_API_KEY`)
+- [x] `GET /api/v1/documents/{id}/chunks` — inspect what processing produced
+- [x] `test_chunking.py`, `test_extraction.py`, `test_embedding.py` added — all pure/mocked, no DB or network needed
+- [x] `test_documents.py` extended for the pipeline, tolerant of missing `GEMINI_API_KEY` in test environments
 
 ## Day 4 — Retrieval + search (planned)
 
-- [ ] pgvector similarity search (`retrieval_service.py`)
+- [ ] pgvector similarity search (`retrieval_service.py`) — table + ivfflat index already exist (Day 3), just needs the query
 - [ ] `/api/v1/search` implemented for real
+- [ ] Embed the search query itself (reuse `embedding_service.embed_texts`)
 
 ## Day 5 — RAG chat with citations (planned)
 

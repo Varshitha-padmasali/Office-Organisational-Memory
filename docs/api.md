@@ -14,19 +14,43 @@ summary.
 
 ## `/api/v1` (versioned feature API)
 
-| Method | Path                       | Status              | Planned |
-|--------|----------------------------|---------------------|---------|
-| POST   | `/api/v1/auth/register`    | ✅ Implemented (Day 2) | — |
-| POST   | `/api/v1/auth/login`       | ✅ Implemented (Day 2) | — |
-| GET    | `/api/v1/auth/me`          | ✅ Implemented (Day 2) | — |
-| POST   | `/api/v1/documents/upload` | ✅ Implemented (Day 2) | — |
-| GET    | `/api/v1/documents/`       | ✅ Implemented (Day 2) | — |
-| GET    | `/api/v1/documents/{id}`   | ✅ Implemented (Day 2) | — |
-| GET    | `/api/v1/chat/`            | 🚧 Stub (HTTP 501)  | Day 4-5 |
-| GET    | `/api/v1/search/`          | 🚧 Stub (HTTP 501)  | Day 4   |
-| GET    | `/api/v1/meetings/`        | 🚧 Stub (HTTP 501)  | Day 6   |
-| GET    | `/api/v1/decisions/`       | 🚧 Stub (HTTP 501)  | Day 6   |
-| GET    | `/api/v1/knowledge-gaps/`  | 🚧 Stub (HTTP 501)  | Day 7   |
+| Method | Path                               | Status              | Planned |
+|--------|-------------------------------------|---------------------|---------|
+| POST   | `/api/v1/auth/register`             | ✅ Implemented (Day 2) | — |
+| POST   | `/api/v1/auth/login`                | ✅ Implemented (Day 2) | — |
+| GET    | `/api/v1/auth/me`                   | ✅ Implemented (Day 2) | — |
+| POST   | `/api/v1/documents/upload`          | ✅ Implemented (Day 2-3) | — |
+| GET    | `/api/v1/documents/`                | ✅ Implemented (Day 2) | — |
+| GET    | `/api/v1/documents/{id}`            | ✅ Implemented (Day 2) | — |
+| POST   | `/api/v1/documents/{id}/reprocess`  | ✅ Implemented (Day 3) | — |
+| GET    | `/api/v1/documents/{id}/chunks`     | ✅ Implemented (Day 3) | — |
+| GET    | `/api/v1/chat/`                     | 🚧 Stub (HTTP 501)  | Day 4-5 |
+| GET    | `/api/v1/search/`                   | 🚧 Stub (HTTP 501)  | Day 4   |
+| GET    | `/api/v1/meetings/`                 | 🚧 Stub (HTTP 501)  | Day 6   |
+| GET    | `/api/v1/decisions/`                | 🚧 Stub (HTTP 501)  | Day 6   |
+| GET    | `/api/v1/knowledge-gaps/`           | 🚧 Stub (HTTP 501)  | Day 7   |
+
+## Documents (Day 2-3)
+
+- **POST `/api/v1/documents/upload`** — multipart `file` field. Requires
+  auth. Accepts `.pdf`, `.docx`, `.txt` up to `MAX_UPLOAD_SIZE_MB` (default
+  20MB). Saves the file, then **synchronously runs the full processing
+  pipeline** (extract text → chunk → embed → store chunks) before
+  responding. Returns `201` with the document's final metadata — `status`
+  will be `"ready"` if processing succeeded, or `"failed"` if any step
+  failed (missing `GEMINI_API_KEY`, unreadable file, etc.). `400` for
+  disallowed file types or empty files, `413` if too large.
+- **GET `/api/v1/documents/`** / **GET `/api/v1/documents/{id}`** —
+  require auth, scoped to the signed-in user. `404` (not `403`) if a
+  document belongs to someone else.
+- **POST `/api/v1/documents/{id}/reprocess`** — re-runs the pipeline for
+  an existing document (clearing any previous chunks first). Useful after
+  fixing the cause of a `"failed"` status, e.g. adding a real
+  `GEMINI_API_KEY` to `.env` after initial upload.
+- **GET `/api/v1/documents/{id}/chunks`** — lists the chunks produced for
+  a document (`id`, `chunk_index`, `content`, `created_at` — embedding
+  vectors are omitted, they're not useful to a frontend caller). Empty
+  list if `status` is `"failed"` or processing hasn't run yet.
 
 Every remaining stub returns a consistent error shape:
 
@@ -53,19 +77,3 @@ Every remaining stub returns a consistent error shape:
 Tokens are JWTs signed with `JWT_SECRET`, valid for
 `ACCESS_TOKEN_EXPIRE_MINUTES` (default 24h). There is no refresh-token flow
 yet — once a token expires, the user has to log in again.
-
-## Documents (Day 2)
-
-- **POST `/api/v1/documents/upload`** — multipart `file` field. Requires
-  auth. Accepts `.pdf`, `.docx`, `.txt` up to `MAX_UPLOAD_SIZE_MB` (default
-  20MB). Returns `201` with the created document's metadata. `400` for
-  disallowed file types or empty files, `413` if too large.
-- **GET `/api/v1/documents/`** — requires auth. Returns only the
-  signed-in user's own documents (see `docs/architecture.md` §11 for the
-  ownership model).
-- **GET `/api/v1/documents/{id}`** — requires auth. `404` if the document
-  doesn't exist *or* belongs to someone else (we don't reveal which).
-
-Uploaded documents are stored with `status: "uploaded"` — text extraction
-and chunking (which would move them to `"processing"`/`"ready"`/`"failed"`)
-are Day 3.

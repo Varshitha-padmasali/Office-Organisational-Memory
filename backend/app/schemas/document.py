@@ -26,3 +26,18 @@ class DocumentOut(BaseModel):
     owner_id: uuid.UUID
 
     model_config = {"from_attributes": True}
+
+
+class ChunkOut(BaseModel):
+    """
+    A single chunk's text + position, for inspecting what processing
+    produced. Deliberately omits the embedding vector — large, and not
+    useful to a frontend caller.
+    """
+
+    id: uuid.UUID
+    chunk_index: int
+    content: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

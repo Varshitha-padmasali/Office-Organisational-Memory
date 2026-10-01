@@ -1,6 +1,6 @@
 # Database
 
-## Status as of Day 2
+## Status as of Day 3
 
 - **Engine:** PostgreSQL 16 with the `pgvector` extension, run via
   `docker-compose.yml` (image: `pgvector/pgvector:pg16`).
@@ -10,9 +10,10 @@
   engine (`asyncpg` driver) + a `get_db()` FastAPI dependency for
   per-request sessions + `check_db_connection()` used by `/health`.
 - **Migrations:** Alembic, configured in `backend/alembic.ini` +
-  `backend/app/db/migrations/env.py`. Two migrations exist so far:
+  `backend/app/db/migrations/env.py`. Three migrations exist so far:
   - `0001_create_users_table.py`
   - `0002_create_documents_table.py`
+  - `0003_create_chunks_table.py`
 
 Run them with:
 
@@ -39,21 +40,32 @@ documents
   content_type       varchar(100)
   size_bytes         integer
   storage_path       varchar(512)   -- local disk path (see app/utils/file_utils.py)
-  status             varchar(20), default 'uploaded'
+  status             varchar(20), default 'uploaded'  -- uploaded | ready | failed
   uploaded_at        timestamptz, default now()
+
+chunks
+  id            uuid, primary key
+  document_id   uuid, FK -> documents.id (ON DELETE CASCADE), indexed
+  chunk_index   integer          -- 0-based position within the document
+  content       text             -- the chunk's extracted text
+  embedding     vector(768)      -- Gemini text-embedding-004 output
+  created_at    timestamptz, default now()
+
+  -- ivfflat index on embedding (cosine ops) for Day 4's similarity search
 ```
 
-`documents.status` is always `"uploaded"` today. `"processing"`, `"ready"`,
-and `"failed"` are reserved for Day 3, once text extraction exists and can
-actually fail or complete.
+`documents.status` lifecycle: `"uploaded"` (file saved) → `"ready"`
+(extraction + chunking + embedding all succeeded) or `"failed"` (any step
+failed — most commonly a missing `GEMINI_API_KEY`). Processing runs
+synchronously inside the upload request today (no background worker), so
+`"processing"` is defined in the API schema but never actually observed —
+see `docs/architecture.md` §12 for why.
 
-## Why chunks/embeddings still don't exist
+## Why `conversations`/`messages`/`decisions`/`knowledge_gaps` still don't exist
 
-The `chunks` table (with a `pgvector` embedding column), `conversations`,
-`messages`, `decisions`, and `knowledge_gaps` are still not created. Chunk
-size/overlap strategy and embedding dimensionality need to be decided
-first (Day 3) — see `docs/architecture.md` §5 for the original reasoning,
-which still holds.
+Those depend on decisions not yet made (multi-turn context handling,
+decision-extraction prompt design) — see `docs/project_notes.md` for the
+Day 4-7 plan.
 
 ## Local access
 
@@ -63,7 +75,13 @@ docker exec -it org-memory-postgres psql -U postgres -d org_memory
 
 ```sql
 -- inside psql
-\dt                      -- list tables
+\dt                                  -- list tables
 SELECT * FROM users;
 SELECT * FROM documents;
+SELECT id, document_id, chunk_index, left(content, 60) FROM chunks;
+
+-- sanity-check a similarity search manually (Day 4 will wrap this in code)
+SELECT content FROM chunks
+ORDER BY embedding <=> (SELECT embedding FROM chunks LIMIT 1)
+LIMIT 5;
 ```

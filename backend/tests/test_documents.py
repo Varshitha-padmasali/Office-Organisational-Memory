@@ -1,11 +1,18 @@
 """
 Tests for /api/v1/documents/*.
 
-STATUS (Day 2): real integration tests requiring a running Postgres
+STATUS (Day 3): real integration tests requiring a running Postgres
 instance (see docker-compose.yml). Each test registers its own throwaway
-user so the suite doesn't depend on shared fixtures/state. Text
-extraction/chunking are still Day 3, so uploaded documents are only
-checked for status "uploaded" here.
+user so the suite doesn't depend on shared fixtures/state.
+
+Upload now triggers the full extraction -> chunking -> embedding pipeline
+synchronously, which calls the real Gemini API if GEMINI_API_KEY is
+configured. Since that's not guaranteed in every environment running this
+suite, tests here deliberately accept EITHER "ready" or "failed" as a
+valid final status rather than asserting one specific outcome — what they
+check is that the pipeline *ran to a final state* and that the API
+contract (chunks endpoint, status codes) holds either way. See
+test_embedding.py for tests that mock the Gemini call directly.
 """
 
 import io
@@ -53,7 +60,10 @@ async def test_upload_list_and_get_document_roundtrip():
         assert upload_resp.status_code == 201
         doc = upload_resp.json()
         assert doc["original_filename"] == "notes.txt"
-        assert doc["status"] == "uploaded"
+        # "ready" if GEMINI_API_KEY is configured in this environment,
+        # "failed" otherwise (e.g. CI without a real key) — both are
+        # valid *final* states; see module docstring.
+        assert doc["status"] in ("ready", "failed")
 
         list_resp = await client.get("/api/v1/documents/", headers=headers)
         assert list_resp.status_code == 200
@@ -87,3 +97,66 @@ async def test_get_nonexistent_document_returns_404():
         resp = await client.get(f"/api/v1/documents/{fake_id}", headers=headers)
 
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_chunks_matches_processing_outcome():
+    """
+    If processing ended in "ready" there should be at least one chunk; if
+    it ended in "failed" (e.g. no GEMINI_API_KEY in this environment)
+    there should be none. Either way, the endpoint itself must work.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _get_auth_header(client)
+        upload_resp = await client.post(
+            "/api/v1/documents/upload",
+            headers=headers,
+            files={
+                "file": (
+                    "notes.txt",
+                    io.BytesIO(b"Hello world, this is a test document with enough text."),
+                    "text/plain",
+                )
+            },
+        )
+        doc = upload_resp.json()
+
+        chunks_resp = await client.get(f"/api/v1/documents/{doc['id']}/chunks", headers=headers)
+
+    assert chunks_resp.status_code == 200
+    if doc["status"] == "ready":
+        assert len(chunks_resp.json()) > 0
+    else:
+        assert chunks_resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_reprocess_nonexistent_document_returns_404():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _get_auth_header(client)
+        fake_id = uuid.uuid4()
+        resp = await client.post(f"/api/v1/documents/{fake_id}/reprocess", headers=headers)
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reprocess_runs_pipeline_again():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _get_auth_header(client)
+        upload_resp = await client.post(
+            "/api/v1/documents/upload",
+            headers=headers,
+            files={"file": ("notes.txt", io.BytesIO(b"Some reprocessable content here."), "text/plain")},
+        )
+        doc_id = upload_resp.json()["id"]
+
+        reprocess_resp = await client.post(
+            f"/api/v1/documents/{doc_id}/reprocess", headers=headers
+        )
+
+    assert reprocess_resp.status_code == 200
+    assert reprocess_resp.json()["status"] in ("ready", "failed")

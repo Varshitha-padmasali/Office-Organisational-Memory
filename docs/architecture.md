@@ -162,3 +162,58 @@ attach the `Authorization` header, and `lib/auth.ts`'s `useAuth()` hook
 calls into `lib/api.ts` (for `getCurrentUser()`) — so the token
 get/set/clear functions live in a third, dependency-free module that both
 can import.
+
+## 12. Day 3: extraction, chunking, and embeddings
+
+**Processing runs synchronously inside the upload request — no task
+queue.** `POST /api/v1/documents/upload` saves the file, then immediately
+calls `document_service.process_document()`, which extracts text, chunks
+it, embeds every chunk via Gemini, and stores the chunks — all before the
+HTTP response is sent. For an MVP where uploads are a handful of small
+files (≤20MB, mostly text-dominant PDFs/DOCXs), this keeps the system
+simple (no Celery/RQ, no job status polling, no worker process to deploy)
+at the cost of upload requests taking a few seconds instead of being
+instant. If this needs to handle larger files or higher volume later, the
+natural evolution is to make `process_document()` a background task
+(FastAPI's `BackgroundTasks` first, a real queue if needed) and have
+`status` actually pass through `"processing"` as an observable state —
+the schema already has that status value reserved for exactly this.
+
+**A failed pipeline doesn't fail the upload.** `process_document()`
+catches every exception internally and sets `status = "failed"` rather
+than raising. The most common failure mode by far is a missing
+`GEMINI_API_KEY` — a developer who hasn't configured one yet should still
+be able to upload and browse files, just without them being searchable
+yet. `POST /api/v1/documents/{id}/reprocess` exists specifically so a
+developer can add the key and retry without re-uploading.
+
+**Chunking is a simple fixed-size sliding window (1000 chars, 150 overlap),
+not sentence- or paragraph-aware.** This was chosen because: (a) it's
+trivial to reason about and test deterministically (see
+`tests/test_chunking.py`'s exact-overlap test), (b) it has no dependency
+on a sentence-boundary library that might mis-segment organizational
+jargon/abbreviations, and (c) retrieval quality from fixed-size chunking
+is a reasonable baseline — if Day 4's search results are noticeably worse
+than expected, smarter chunking (paragraph-aware, or using the embedding
+model's own token count instead of characters) is the first thing to
+revisit, with the chunk_size/overlap already exposed as function
+parameters to make that change localized to one file.
+
+**Embedding model: Gemini `text-embedding-004`, called once per chunk.**
+Chosen for consistency with the project's existing choice of Gemini for
+generation (one API key, one vendor, one place to look at
+quota/billing). Calling the API once per chunk rather than batching
+trades some latency for simplicity and avoids depending on batch-endpoint
+behavior that varies across client library versions — acceptable since
+MVP documents produce a handful of chunks each. `EMBEDDING_DIMENSIONS = 768`
+is defined once (`app/models/chunk.py`) and imported by both the
+embedding service (to validate what the API actually returned) and the
+migration (to size the `vector` column) — if the model ever changes,
+both call sites fail loudly instead of silently storing truncated or
+padded vectors.
+
+**The `chunks` table gets an `ivfflat` cosine-similarity index up front**
+(migration `0003`), even though nothing queries it until Day 4. Creating
+it now, on an empty table, means Day 4 doesn't need its own migration just
+to add an index — it only needs to write the `SELECT ... ORDER BY
+embedding <=> :query_vector` query itself.

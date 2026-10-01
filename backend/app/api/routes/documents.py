@@ -1,11 +1,14 @@
 """
 Documents routes.
 
-STATUS (Day 2): upload + list + get-by-id are implemented for real,
-storing files on local disk (app/utils/file_utils.py) and metadata in
-Postgres. Every route requires authentication and documents are strictly
-scoped to their owner. Text extraction and chunking are still Day 3 —
-uploaded documents stay in "uploaded" status until then.
+STATUS (Day 3): upload now triggers the full extraction -> chunking ->
+embedding pipeline synchronously (see document_service.process_document),
+so a document's `status` is "ready" or "failed" by the time the upload
+response comes back — there's no background worker yet, so "processing"
+is never actually observable from the outside. /reprocess lets a user
+retry after fixing the cause of a "failed" status (most commonly: adding
+a GEMINI_API_KEY after the fact). /chunks exposes what processing
+produced, for debugging/visibility ahead of Day 4's real search.
 """
 
 import uuid
@@ -17,7 +20,7 @@ from app.api.dependencies import get_current_user
 from app.core.config import get_settings
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.document import DocumentOut
+from app.schemas.document import ChunkOut, DocumentOut
 from app.services import document_service
 from app.utils.file_utils import ALLOWED_EXTENSIONS, allowed_extension
 
@@ -25,6 +28,17 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 settings = get_settings()
 
 MAX_UPLOAD_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+
+async def _get_owned_document_or_404(
+    db: AsyncSession, owner_id: uuid.UUID, document_id: uuid.UUID
+):
+    document = await document_service.get_document_for_user(db, owner_id, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found."
+        )
+    return document
 
 
 @router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
@@ -58,6 +72,9 @@ async def upload_document(
         content_type=file.content_type or "application/octet-stream",
         content=content,
     )
+
+    # Synchronous for the MVP (no task queue yet) — see module docstring.
+    document = await document_service.process_document(db, document)
     return document
 
 
@@ -76,9 +93,28 @@ async def get_document(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentOut:
-    document = await document_service.get_document_for_user(db, current_user.id, document_id)
-    if document is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found."
-        )
-    return document
+    return await _get_owned_document_or_404(db, current_user.id, document_id)
+
+
+@router.post("/{document_id}/reprocess", response_model=DocumentOut)
+async def reprocess_document(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DocumentOut:
+    document = await _get_owned_document_or_404(db, current_user.id, document_id)
+
+    # Clear any chunks from a previous attempt so a retry doesn't duplicate them.
+    await document_service.delete_chunks_for_document(db, document_id)
+    return await document_service.process_document(db, document)
+
+
+@router.get("/{document_id}/chunks", response_model=list[ChunkOut])
+async def get_document_chunks(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ChunkOut]:
+    await _get_owned_document_or_404(db, current_user.id, document_id)
+    chunks = await document_service.list_chunks_for_document(db, document_id)
+    return list(chunks)
