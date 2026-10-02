@@ -47,12 +47,15 @@ Running log of what's built vs. planned. Update this as each day's work lands.
 - [x] Frontend Chat page wired to real search (gated behind sign-in); shows raw ranked passages as citations, explicitly NOT a generated answer
 - [x] `test_search.py` rewritten with real integration tests, including a full upload→search e2e test tolerant of missing `GEMINI_API_KEY`
 
-## Day 5 — RAG chat with citations (planned)
+## Day 5 — RAG chat with citations (this delivery)
 
-- [ ] Gemini API integration for **generation** (retrieval already works — Day 4)
-- [ ] `rag_service.py`: feed Day 4's search results to Gemini as context, get back a grounded answer
-- [ ] `/api/v1/chat` implemented for real, returns a generated answer + the citations it was grounded on
-- [ ] Frontend chat window updated to show the generated answer as the primary content, citations as supporting evidence (currently citations ARE the content — see `docs/architecture.md` §13)
+- [x] Gemini generation integration (`rag_service.py`), built on Day 4's retrieval
+- [x] LLM is never called when retrieval finds nothing - returns an honest fixed message instead
+- [x] Prompt template (`app/prompts/rag_prompt.txt`) instructs context-only answers with numbered source citations
+- [x] `POST /api/v1/chat/` implemented for real - returns generated answer + citations it was grounded on, `503` on embedding/generation failure
+- [x] Frontend chat window shows the generated answer as the primary content, citations as supporting evidence below (with relevance score)
+- [x] `test_rag.py` rewritten with real mocked unit tests (prompt building, no-context short-circuit, generation success/failure)
+- [x] `test_chat.py` added - real integration tests against the live endpoint, tolerant of missing `GEMINI_API_KEY`
 
 ## Day 6 — Meetings + decisions (planned)
 

@@ -8,9 +8,9 @@ import { useAuth } from "@/lib/auth";
 /**
  * Chat page.
  *
- * STATUS (Day 4): gated behind sign-in because the backend's search
- * endpoint requires a bearer token. See ChatWindow.tsx for what "chat"
- * actually does right now (real search, not yet generated answers).
+ * STATUS (Day 5): fully functional. Gated behind sign-in because the
+ * backend's chat endpoint requires a bearer token. See ChatWindow.tsx for
+ * how answers are generated and grounded.
  */
 export default function ChatPage() {
   const { isAuthenticated, loading } = useAuth();
@@ -19,7 +19,7 @@ export default function ChatPage() {
     <div>
       <PageHeader
         title="Chat"
-        description="Ask natural-language questions about your organization's documents."
+        description="Ask questions and get answers generated from your uploaded documents, with citations."
       />
 
       {loading && <p className="text-sm text-gray-400">Checking your session…</p>}
@@ -27,7 +27,7 @@ export default function ChatPage() {
       {!loading && !isAuthenticated && (
         <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
           <p className="text-sm text-gray-500 mb-3">
-            You need to sign in to search your documents.
+            You need to sign in to ask questions about your documents.
           </p>
           <Link href="/login" className="text-brand-600 text-sm font-medium hover:underline">
             Go to login

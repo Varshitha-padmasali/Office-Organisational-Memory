@@ -261,3 +261,59 @@ component). Day 5 replaces this with an actual call to Gemini to generate
 a grounded answer from the same retrieved passages — at that point the
 citations become support *for* a written answer instead of *being* the
 answer.
+
+## 14. Day 5: generation
+
+**The LLM is never called when retrieval finds nothing.** If
+`retrieval_service.search_chunks()` returns an empty list,
+`rag_service.answer_question()` returns a fixed, honest message
+("I couldn't find anything relevant...") without touching Gemini at all.
+This is the single most important decision in this module: an LLM asked
+to answer a question with no supporting context will often still produce
+a fluent-sounding answer anyway, drawing on its general training data
+instead of the organization's actual documents - which is precisely the
+failure mode a RAG system exists to prevent. Short-circuiting before the
+call is a stronger guarantee than instructing the model not to do this in
+the prompt, because it doesn't depend on the model reliably following
+that instruction.
+
+**The prompt instructs the model to answer ONLY from the provided
+context, and to say so plainly if the context is insufficient** (see
+`app/prompts/rag_prompt.txt`). This is a second layer of defense, not the
+primary one - the primary one is the empty-results short-circuit above.
+Even with results present, the retrieved chunks might not actually
+contain the answer (e.g. they're topically related but don't cover the
+specific question), so the model still needs instructions for that case.
+
+**Chat is a `POST`, not a `GET` like search.** Both endpoints take a
+query string in some form, but generation is a costly, side-effecting
+external API call (billed, rate-limited, non-idempotent in the sense that
+re-running it costs money again) rather than a cheap idempotent lookup.
+`POST` also leaves room for a request body to grow (e.g. a future
+`conversation_id` for multi-turn context) without the awkwardness of
+stuffing more fields into query parameters.
+
+**`build_prompt()` is a standalone, pure function, not inlined into
+`answer_question()`.** It takes the question and retrieved results and
+returns a string - no I/O, no network, no database. This is what makes
+`tests/test_rag.py` able to verify the prompt's structure (correct source
+numbering, question included, chunk content included) without mocking
+anything beyond that function's direct inputs, and separately what makes
+the orchestration logic (when to call the LLM, how failures are handled)
+testable by mocking only `retrieval_service.search_chunks` and the Gemini
+SDK calls - the two actually-expensive operations.
+
+**Generation failures are caught and re-raised as a dedicated
+`GenerationError`,** mirroring `EmbeddingError`'s role in Day 3-4. The
+chat route catches both and maps them to `503` - a generation failure
+(timeout, API error, malformed response) is a server-side problem with an
+external dependency, not something the client did wrong, so `503` is the
+honest status code, the same reasoning applied to search in Day 4.
+
+**The chat model (`GEMINI_CHAT_MODEL`) is configurable via settings, while
+the embedding model is not.** The embedding model's output dimension is
+load-bearing - it has to match `EMBEDDING_DIMENSIONS` and the `chunks`
+table's `vector` column width, so changing it requires a migration, not
+just a config edit (see section 12). The chat model has no such
+constraint: any model that implements the same `generate_content`
+interface can be swapped in via `.env` without touching the database.

@@ -32,8 +32,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
-    # --- AI provider (used starting Day 3+, not called on Day 1) ---
+    # --- AI provider ---
     GEMINI_API_KEY: str = ""
+    # Embedding model is hardcoded in embedding_service.py (its dimension
+    # is load-bearing — see app.models.chunk.EMBEDDING_DIMENSIONS — so
+    # changing it isn't a simple config edit). The chat/generation model
+    # has no such constraint, so it's configurable here.
+    GEMINI_CHAT_MODEL: str = "gemini-2.0-flash"
 
     # --- File uploads (Day 2) ---
     # Relative paths are resolved against the repo root by app/utils/file_utils.py.

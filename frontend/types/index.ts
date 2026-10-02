@@ -64,13 +64,15 @@ export interface SearchResponse {
   results: SearchResultItem[];
 }
 
-// --- Chat / RAG (backend: search is real as of Day 4; a single generated
-// answer with inline citations is still Day 5 — see ChatWindow.tsx) ---
+// --- Chat / RAG (backend: implemented as of Day 5) ---
 export interface SourceCitation {
   document_id: string;
   document_name: string;
   snippet: string;
   page?: number;
+  /** Cosine similarity, 0 to 1, higher is more relevant. Optional since
+   * not every citation source populates it. */
+  score?: number;
 }
 
 export interface ChatMessage {
@@ -79,4 +81,17 @@ export interface ChatMessage {
   content: string;
   citations?: SourceCitation[];
   created_at: string;
+}
+
+export interface ChatCitationResult {
+  chunk_id: string;
+  document_id: string;
+  document_name: string;
+  snippet: string;
+  score: number;
+}
+
+export interface ChatAnswer {
+  answer: string;
+  citations: ChatCitationResult[];
 }

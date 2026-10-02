@@ -10,6 +10,7 @@
 
 import { clearToken, getToken } from "@/lib/token";
 import type {
+  ChatAnswer,
   HealthStatus,
   LoginPayload,
   OrgDocument,
@@ -112,6 +113,19 @@ export async function listDocuments(): Promise<OrgDocument[]> {
 export async function searchDocuments(query: string, topK = 5): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query, top_k: String(topK) });
   return request<SearchResponse>(`/api/v1/search/?${params.toString()}`);
+}
+
+/**
+ * @status implemented (Day 5) - generates a real answer from the
+ * signed-in user's own "ready" documents, grounded on the chunks
+ * retrieved by the same search used in searchDocuments(). Returns the
+ * generated text plus the citations it was grounded on.
+ */
+export async function sendChatMessage(question: string, topK = 5): Promise<ChatAnswer> {
+  return request<ChatAnswer>("/api/v1/chat/", {
+    method: "POST",
+    body: JSON.stringify({ question, top_k: topK }),
+  });
 }
 
 /**
