@@ -57,11 +57,17 @@ Running log of what's built vs. planned. Update this as each day's work lands.
 - [x] `test_rag.py` rewritten with real mocked unit tests (prompt building, no-context short-circuit, generation success/failure)
 - [x] `test_chat.py` added - real integration tests against the live endpoint, tolerant of missing `GEMINI_API_KEY`
 
-## Day 6 — Meetings + decisions (planned)
+## Day 6 — Meetings + decisions (this delivery)
 
-- [ ] Meeting notes ingestion
-- [ ] Decision extraction from documents/meetings
-- [ ] `/api/v1/meetings`, `/api/v1/decisions` implemented
+- [x] Meeting notes ingestion (`POST /api/v1/meetings/`) with automatic summarization on save
+- [x] Decision extraction from meetings (automatic) and documents (opt-in via `/extract-decisions`)
+- [x] `meetings` + `decisions` tables (migrations 0004, 0005) - exactly-one-source CHECK constraint on decisions
+- [x] `/api/v1/meetings/*` and `/api/v1/decisions/*` fully implemented
+- [x] `POST /api/v1/documents/{id}/extract-decisions` added to the documents router
+- [x] Frontend: real Meetings page (log notes, see summary + status) and Decisions page (browse, linked back to source)
+- [x] Documents page gets an "Extract decisions" action per ready document
+- [x] `test_decision_extraction.py` (mocked, no DB/network), `test_meetings.py`, `test_decisions.py` (real integration, tolerant of missing `GEMINI_API_KEY`)
+- [x] JSON-parsing/fence-stripping logic verified by standalone execution against nine cases before shipping
 
 ## Day 7 — Knowledge gaps + polish (planned)
 

@@ -317,3 +317,59 @@ table's `vector` column width, so changing it requires a migration, not
 just a config edit (see section 12). The chat model has no such
 constraint: any model that implements the same `generate_content`
 interface can be swapped in via `.env` without touching the database.
+
+## 15. Day 6: meetings and decisions
+
+**A decision always belongs to exactly one source (a meeting or a
+document), enforced at two levels.** `decisions.meeting_id` and
+`decisions.document_id` are both nullable foreign keys, and a database
+CHECK constraint (`ck_decisions_exactly_one_source`, migration 0005)
+guarantees exactly one is set on every row - not "at least one," exactly
+one. `decision_service.create_decisions()` also refuses at the
+application level before even reaching the database. Two layers instead
+of one: the application check gives a clear Python-level error during
+development; the database constraint is what actually protects the data
+if some future code path bypasses the service layer.
+
+**Meeting processing (summarize + extract decisions) is synchronous and
+automatic on create, mirroring document upload from Day 3** - same
+reasoning: MVP scale, no task queue yet, and a failure degrades the
+meeting to `status: "failed"` rather than losing the raw notes, which are
+saved before any LLM call happens.
+
+**Document decision extraction is the opposite: explicit and opt-in**,
+via `POST /api/v1/documents/{id}/extract-decisions`, not run automatically
+on upload. Documents are already paying for one synchronous LLM-adjacent
+pipeline at upload time (extract, chunk, embed - Day 3); adding decision
+extraction as a second mandatory step would mean every single upload,
+including ones with no decisions in them at all (most documents), pays
+the latency and Gemini cost of an extra generation call. Meetings don't
+have this problem because they're typically short, so summarizing and
+extracting decisions together is cheap. The trade-off is visible in the
+UI: documents get an "Extract decisions" button the user presses when
+they expect it's worth it, meetings get decisions "for free."
+
+**Decision extraction asks Gemini for JSON, not prose, and the parsing is
+written defensively.** The prompt (`app/prompts/decision_prompt.txt`)
+asks for a plain JSON array with no markdown fences, but
+`decision_service._strip_code_fences()` strips them anyway if the model
+adds them - which, empirically, LLMs asked for JSON often do despite
+being told not to. Malformed JSON, a non-array response, or array items
+missing the required `summary` field all fail predictably
+(`DecisionExtractionError` for the first two, silently skipped for the
+third) rather than crashing or inserting garbage rows. This logic was
+verified by extracting it into a standalone script and running it against
+nine cases (plain JSON, `json`-fenced, bare-fenced, empty array, multiple
+items, a missing-field item, and malformed input) before it went into the
+service.
+
+**`DecisionOut` is built by a service-layer function
+(`decision_service.to_decision_out()`), not a Pydantic `from_attributes`
+mapping straight off the ORM row.** A `Decision` row only stores
+`meeting_id` or `document_id` - it doesn't know the meeting's title or the
+document's filename. Rather than make every caller do a second lookup (or
+worse, have the frontend do N+1 requests to resolve titles), both list
+and get queries use `outerjoin`s against `meetings` and `documents` to
+fetch the title in the same query, and `to_decision_out()` collapses the
+two nullable source columns plus the resolved title into the single
+`source_type`/`source_id`/`source_title` trio the API actually exposes.

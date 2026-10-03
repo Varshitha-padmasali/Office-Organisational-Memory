@@ -20,7 +20,9 @@ from app.db.base import Base
 # Import every model module so its table is registered on Base.metadata —
 # required for `alembic revision --autogenerate` to see it.
 from app.models import chunk  # noqa: F401
+from app.models import decision  # noqa: F401
 from app.models import document  # noqa: F401
+from app.models import meeting  # noqa: F401
 from app.models import user  # noqa: F401
 
 config = context.config

@@ -20,8 +20,9 @@ from app.api.dependencies import get_current_user
 from app.core.config import get_settings
 from app.db.database import get_db
 from app.models.user import User
+from app.schemas.decision import DecisionOut
 from app.schemas.document import ChunkOut, DocumentOut
-from app.services import document_service
+from app.services import decision_service, document_service
 from app.utils.file_utils import ALLOWED_EXTENSIONS, allowed_extension
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -118,3 +119,43 @@ async def get_document_chunks(
     await _get_owned_document_or_404(db, current_user.id, document_id)
     chunks = await document_service.list_chunks_for_document(db, document_id)
     return list(chunks)
+
+
+@router.post("/{document_id}/extract-decisions", response_model=list[DecisionOut])
+async def extract_document_decisions(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[DecisionOut]:
+    """
+    Extract decisions from a document's processed text. Opt-in rather than
+    automatic on upload (unlike meetings) because a document can be much
+    longer than typical meeting notes, and running this on every upload by
+    default would add real latency and Gemini cost to every single file a
+    user adds, most of which won't contain decisions at all.
+    """
+    document = await _get_owned_document_or_404(db, current_user.id, document_id)
+
+    chunks = await document_service.list_chunks_for_document(db, document_id)
+    if not chunks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This document has no processed text yet (status must be "ready").',
+        )
+
+    full_text = "\n\n".join(c.content for c in chunks)
+
+    await decision_service.delete_decisions_for_document(db, document_id)
+    try:
+        raw_decisions = decision_service.extract_decisions_from_text(full_text)
+    except decision_service.DecisionExtractionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+
+    decisions = await decision_service.create_decisions(
+        db, owner_id=current_user.id, decisions=raw_decisions, document_id=document_id
+    )
+    return [
+        decision_service.to_decision_out(d, None, document.original_filename) for d in decisions
+    ]

@@ -1,4 +1,14 @@
-# Placeholder — not used yet.
-# Planned for Day 6: prompt template for extracting organizational
-# decisions from meeting notes / documents, consumed by
-# app/services/decision_service.py.
+You are reviewing text from an organization's internal documents or
+meeting notes. Identify any concrete decisions that were made, not
+proposals, options discussed, or open questions. Only include things
+that were actually decided.
+
+Respond with ONLY a JSON array (no other text, no markdown fences). Each
+element must be an object with exactly these fields:
+  "summary": a one-sentence description of the decision
+  "context": the sentence or two from the text that the decision is based on
+
+If no decisions are found, respond with an empty array: []
+
+Text:
+{text}

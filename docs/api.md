@@ -7,97 +7,93 @@ summary.
 
 ## Unversioned (infrastructure)
 
-| Method | Path      | Status        | Description                              |
-|--------|-----------|---------------|-------------------------------------------|
+| Method | Path      | Status      | Description                              |
+|--------|-----------|-------------|-------------------------------------------|
 | GET    | `/`       | Implemented | API metadata / links to docs & health     |
 | GET    | `/health` | Implemented | Liveness + Postgres connectivity check    |
 
 ## `/api/v1` (versioned feature API)
 
-| Method | Path                               | Status                 | Planned |
-|--------|-------------------------------------|------------------------|---------|
-| POST   | `/api/v1/auth/register`             | Implemented (Day 2)    | - |
-| POST   | `/api/v1/auth/login`                | Implemented (Day 2)    | - |
-| GET    | `/api/v1/auth/me`                   | Implemented (Day 2)    | - |
-| POST   | `/api/v1/documents/upload`          | Implemented (Day 2-3)  | - |
-| GET    | `/api/v1/documents/`                | Implemented (Day 2)    | - |
-| GET    | `/api/v1/documents/{id}`            | Implemented (Day 2)    | - |
-| POST   | `/api/v1/documents/{id}/reprocess`  | Implemented (Day 3)    | - |
-| GET    | `/api/v1/documents/{id}/chunks`     | Implemented (Day 3)    | - |
-| GET    | `/api/v1/search/`                   | Implemented (Day 4)    | - |
-| POST   | `/api/v1/chat/`                     | Implemented (Day 5)    | - |
-| GET    | `/api/v1/meetings/`                 | Stub (HTTP 501)        | Day 6 |
-| GET    | `/api/v1/decisions/`                | Stub (HTTP 501)        | Day 6 |
-| GET    | `/api/v1/knowledge-gaps/`           | Stub (HTTP 501)        | Day 7 |
+| Method | Path                                      | Status                 | Planned |
+|--------|--------------------------------------------|------------------------|---------|
+| POST   | `/api/v1/auth/register`                    | Implemented (Day 2)    | - |
+| POST   | `/api/v1/auth/login`                       | Implemented (Day 2)    | - |
+| GET    | `/api/v1/auth/me`                          | Implemented (Day 2)    | - |
+| POST   | `/api/v1/documents/upload`                 | Implemented (Day 2-3)  | - |
+| GET    | `/api/v1/documents/`                       | Implemented (Day 2)    | - |
+| GET    | `/api/v1/documents/{id}`                   | Implemented (Day 2)    | - |
+| POST   | `/api/v1/documents/{id}/reprocess`         | Implemented (Day 3)    | - |
+| GET    | `/api/v1/documents/{id}/chunks`            | Implemented (Day 3)    | - |
+| POST   | `/api/v1/documents/{id}/extract-decisions` | Implemented (Day 6)    | - |
+| GET    | `/api/v1/search/`                          | Implemented (Day 4)    | - |
+| POST   | `/api/v1/chat/`                            | Implemented (Day 5)    | - |
+| POST   | `/api/v1/meetings/`                        | Implemented (Day 6)    | - |
+| GET    | `/api/v1/meetings/`                        | Implemented (Day 6)    | - |
+| GET    | `/api/v1/meetings/{id}`                    | Implemented (Day 6)    | - |
+| POST   | `/api/v1/meetings/{id}/reprocess`          | Implemented (Day 6)    | - |
+| GET    | `/api/v1/decisions/`                       | Implemented (Day 6)    | - |
+| GET    | `/api/v1/decisions/{id}`                   | Implemented (Day 6)    | - |
+| GET    | `/api/v1/knowledge-gaps/`                  | Stub (HTTP 501)        | Day 7 |
+
+## Meetings (Day 6)
+
+- **POST `/api/v1/meetings/`** - `{ title, raw_notes, meeting_date? }`.
+  Requires auth. Saves the notes, then synchronously summarizes them and
+  extracts any decisions (see `app/services/meeting_service.py`) before
+  responding - this can take a few seconds. `status` in the response is
+  already `"summarized"` or `"failed"`, never left at `"pending"`.
+- **GET `/api/v1/meetings/`** / **GET `/api/v1/meetings/{id}`** - require
+  auth, scoped to the signed-in user.
+- **POST `/api/v1/meetings/{id}/reprocess`** - re-runs summarization and
+  decision extraction (clearing any previously extracted decisions for
+  that meeting first).
+
+## Decisions (Day 6)
+
+- **GET `/api/v1/decisions/`** / **GET `/api/v1/decisions/{id}`** - require
+  auth, scoped to the signed-in user. Each decision has `source_type`
+  (`"meeting"` or `"document"`), `source_id`, and `source_title` (the
+  meeting's title or the document's original filename) so the frontend
+  doesn't need a separate lookup to show where it came from. There is no
+  direct "create decision" endpoint - decisions only come from processing
+  a meeting or calling:
+- **POST `/api/v1/documents/{id}/extract-decisions`** - extracts decisions
+  from a document's already-processed text (its chunks, joined back
+  together). Opt-in rather than automatic on upload, unlike meetings - see
+  `docs/architecture.md` section 15 for why. `400` if the document isn't
+  `"ready"` yet (no processed text to extract from). Clears any
+  previously extracted decisions for that document first, same as
+  meetings' reprocess.
 
 ## Chat (Day 5)
 
 - **POST `/api/v1/chat/`** - `{ question, top_k? }`. Requires auth.
-  Retrieves the most relevant chunks from the signed-in user's own
-  `"ready"` documents (same mechanism as `/api/v1/search/`), then asks
-  Gemini to generate an answer using ONLY those chunks as context. Returns:
-
-  ```json
-  {
-    "answer": "Employees get 25 days of paid leave per year. [Source 1]",
-    "citations": [
-      {
-        "chunk_id": "...",
-        "document_id": "...",
-        "document_name": "handbook.txt",
-        "snippet": "Employees are entitled to twenty-five days...",
-        "score": 0.87
-      }
-    ]
-  }
-  ```
-
-  If nothing relevant is found, the LLM is never called - `answer` is a
-  direct "I couldn't find anything relevant" message and `citations` is
-  empty. `503` if embedding the query fails (missing `GEMINI_API_KEY`) or
-  if the generation call itself fails.
-
-  This is a `POST`, not a `GET` like search, because generating an answer
-  is a costly, side-effecting LLM call rather than an idempotent lookup.
+  Retrieves relevant chunks, then asks Gemini to generate an answer using
+  ONLY those chunks. Returns `{ answer, citations }`. If nothing relevant
+  is found, the LLM is never called and `answer` says so directly.
 
 ## Search (Day 4)
 
-- **GET `/api/v1/search/?q=<query>&top_k=<n>`** - requires auth. Embeds
-  `q` via the same Gemini model used for documents
-  (`task_type="retrieval_query"`), then runs a pgvector cosine-similarity
-  query scoped to the signed-in user's own documents with
-  `status: "ready"`. Returns ranked raw passages (`score` = cosine
-  similarity, 1.0 = identical). `top_k` defaults to 5, max 20. `503` if
-  embeddings aren't configured.
-
-  This is the retrieval step that both `/api/v1/search/` and
-  `/api/v1/chat/` share - search returns the raw passages directly, chat
-  feeds them to an LLM first.
+- **GET `/api/v1/search/?q=<query>&top_k=<n>`** - requires auth. Returns
+  ranked raw passages (`score` = cosine similarity). `top_k` defaults to
+  5, max 20.
 
 ## Documents (Day 2-3)
 
 - **POST `/api/v1/documents/upload`** - multipart `file` field. Requires
-  auth. Accepts `.pdf`, `.docx`, `.txt` up to `MAX_UPLOAD_SIZE_MB` (default
-  20MB). Saves the file, then synchronously runs the full processing
-  pipeline (extract text, chunk, embed, store chunks) before responding.
-  Returns `201` with the document's final metadata - `status` will be
-  `"ready"` if processing succeeded, or `"failed"` if any step failed
-  (missing `GEMINI_API_KEY`, unreadable file, etc.). `400` for disallowed
-  file types or empty files, `413` if too large.
+  auth. Accepts `.pdf`, `.docx`, `.txt` up to `MAX_UPLOAD_SIZE_MB`.
+  Synchronously extracts, chunks, and embeds before responding.
 - **GET `/api/v1/documents/`** / **GET `/api/v1/documents/{id}`** -
-  require auth, scoped to the signed-in user. `404` (not `403`) if a
-  document belongs to someone else.
-- **POST `/api/v1/documents/{id}/reprocess`** - re-runs the pipeline for
-  an existing document (clearing any previous chunks first).
-- **GET `/api/v1/documents/{id}/chunks`** - lists the chunks produced for
-  a document.
+  require auth, scoped to the signed-in user.
+- **POST `/api/v1/documents/{id}/reprocess`** - re-runs extraction/chunking/embedding.
+- **GET `/api/v1/documents/{id}/chunks`** - lists the chunks produced.
 
 Every remaining stub returns a consistent error shape:
 
 ```json
 {
   "error": {
-    "message": "Meetings endpoints are not implemented yet. Planned for Day 6.",
+    "message": "Knowledge gap endpoints are not implemented yet. Planned for Day 7.",
     "status_code": 501
   }
 }
@@ -105,14 +101,9 @@ Every remaining stub returns a consistent error shape:
 
 ## Auth (Day 2)
 
-- **POST `/api/v1/auth/register`** - `{ email, password, full_name? }` ->
-  `201` with `{ access_token, token_type }`. `409` if the email is already
-  registered.
-- **POST `/api/v1/auth/login`** - `{ email, password }` -> `200` with
-  `{ access_token, token_type }`. `401` on wrong email/password.
-- **GET `/api/v1/auth/me`** - requires `Authorization: Bearer <token>` ->
-  `200` with `{ id, email, full_name }`. `401` if the token is missing,
-  invalid, or expired.
+- **POST `/api/v1/auth/register`** - `{ email, password, full_name? }`.
+- **POST `/api/v1/auth/login`** - `{ email, password }`.
+- **GET `/api/v1/auth/me`** - requires `Authorization: Bearer <token>`.
 
 Tokens are JWTs signed with `JWT_SECRET`, valid for
 `ACCESS_TOKEN_EXPIRE_MINUTES` (default 24h).

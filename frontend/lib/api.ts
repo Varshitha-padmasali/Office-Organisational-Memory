@@ -11,8 +11,11 @@
 import { clearToken, getToken } from "@/lib/token";
 import type {
   ChatAnswer,
+  CreateMeetingPayload,
+  Decision,
   HealthStatus,
   LoginPayload,
+  Meeting,
   OrgDocument,
   RegisterPayload,
   SearchResponse,
@@ -155,6 +158,40 @@ export async function uploadDocument(file: File): Promise<OrgDocument> {
   }
 
   return response.json() as Promise<OrgDocument>;
+}
+
+/**
+ * @status implemented (Day 6). Saving a meeting triggers real
+ * summarization and decision extraction on the backend before this
+ * resolves, so it can take a few seconds.
+ */
+export async function createMeeting(payload: CreateMeetingPayload): Promise<Meeting> {
+  return request<Meeting>("/api/v1/meetings/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** @status implemented (Day 6) - lists the signed-in user's own meetings. */
+export async function listMeetings(): Promise<Meeting[]> {
+  return request<Meeting[]>("/api/v1/meetings/");
+}
+
+/** @status implemented (Day 6) - lists the signed-in user's own decisions,
+ * found in either meetings or documents. */
+export async function listDecisions(): Promise<Decision[]> {
+  return request<Decision[]>("/api/v1/decisions/");
+}
+
+/**
+ * @status implemented (Day 6). Opt-in rather than automatic on upload -
+ * see the backend route's docstring for why. Requires the document's
+ * status to already be "ready".
+ */
+export async function extractDocumentDecisions(documentId: string): Promise<Decision[]> {
+  return request<Decision[]>(`/api/v1/documents/${documentId}/extract-decisions`, {
+    method: "POST",
+  });
 }
 
 export { ApiError };

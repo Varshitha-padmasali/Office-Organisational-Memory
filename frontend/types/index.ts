@@ -95,3 +95,34 @@ export interface ChatAnswer {
   answer: string;
   citations: ChatCitationResult[];
 }
+
+// --- Meetings (backend: implemented as of Day 6) ---
+export type MeetingStatus = "pending" | "summarized" | "failed";
+
+export interface Meeting {
+  id: string;
+  title: string;
+  raw_notes: string;
+  summary: string | null;
+  meeting_date: string | null;
+  status: MeetingStatus;
+  created_at: string;
+  owner_id: string;
+}
+
+export interface CreateMeetingPayload {
+  title: string;
+  raw_notes: string;
+  meeting_date?: string;
+}
+
+// --- Decisions (backend: implemented as of Day 6) ---
+export interface Decision {
+  id: string;
+  summary: string;
+  context: string | null;
+  source_type: "meeting" | "document";
+  source_id: string;
+  source_title: string;
+  created_at: string;
+}
